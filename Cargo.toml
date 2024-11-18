@@ -1,38 +1,30 @@
 [package]
-name = "iroh-car"
-authors = ["dignifiedquire <me@dignifiedquire.com>"]
-description = "Implementation the car files for iroh"
-version = "0.5.0"
+name = "car-nostd"
+authors = [
+  "dignifiedquire <me@dignifiedquire.com>",
+  "Karim Agha <karim.dev@gmail.com>",
+]
+description = "Implementation the car files for no_std"
+version = "0.6.0"
 edition = "2021"
 license = "Apache-2.0/MIT"
 rust-version = "1.70.0"
-repository = "https://github.com/n0-computer/iroh-car"
-homepage = "https://github.com/n0-computer/iroh-car"
-readme="README.md"
+repository = "https://github.com/karim-agha/car-nostd"
+homepage = "https://github.com/karim-agha/car-nostd"
+readme = "README.md"
 
 [dependencies]
-anyhow = "1"
-cid = { version = "0.11", features = ["serde"] }
-futures = "0.3"
-serde = { version = "1.0.210", features = ["derive"] }
-serde_ipld_dagcbor = { version = "0.6.1", features = ["std"], default-features = false }
-thiserror = "1"
-tokio = { version = "^1", features = ["io-util"] }
-unsigned-varint = { version = "0.7.1", features = ["std"] }
+cid = { version = "0.11", features = ["serde"], default-features = false }
+serde = { version = "1.0.210", features = ["derive"], default-features = false }
+serde_ipld_dagcbor = { version = "0.6.1", features = [
+  "std",
+], default-features = false }
+unsigned-varint = { version = "0.8", default-features = false }
+core2 = "0.4"
 
 [dev-dependencies]
 multihash = "0.19"
-tokio = { version = "^1", features = ["macros", "sync", "rt", "io-util"] }
-test-strategy = "0.3"
-multihash-codetable = { version = "0.1.3", features = ["blake3"] }
-
-[features]
-default = []
-
-[target.'cfg(target_arch = "wasm32")'.dev-dependencies]
-wasm-bindgen-test = { version = "^0.3" }
-proptest = { version = "1.1", default-features = false, features = ["std"] }
-getrandom = { version = "0.2", features = ["js"] }
-
-[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+itertools = "0.13"
+multihash-codetable = { version = "0.1", features = ["blake3"] }
 proptest = "1.1"
+test-strategy = "0.3"

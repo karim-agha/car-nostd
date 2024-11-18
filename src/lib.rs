@@ -1,4 +1,9 @@
 //! Implementation of the [car](https://ipld.io/specs/transport/car/) format.
+//! This is a fork of https://github.com/n0-computer/iroh-car that runs in no_std environments.
+
+#![no_std]
+
+extern crate alloc;
 
 mod error;
 mod header;

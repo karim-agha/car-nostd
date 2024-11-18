@@ -1,6 +1,5 @@
+use alloc::{string::ToString, vec::Vec};
 use cid::Cid;
-use futures::Stream;
-use tokio::io::AsyncRead;
 
 use crate::{
     error::Error,
@@ -18,13 +17,13 @@ pub struct CarReader<R> {
 
 impl<R> CarReader<R>
 where
-    R: AsyncRead + Unpin,
+    R: core2::io::Read,
 {
     /// Creates a new CarReader and parses the CarHeader
-    pub async fn new(mut reader: R) -> Result<Self, Error> {
+    pub fn new(mut reader: R) -> Result<Self, Error> {
         let mut buffer = Vec::new();
 
-        match ld_read(&mut reader, &mut buffer).await? {
+        match ld_read(&mut reader, &mut buffer)? {
             Some(buf) => {
                 let header = CarHeader::decode(buf)?;
 
@@ -46,39 +45,40 @@ where
     }
 
     /// Returns the next IPLD Block in the buffer
-    pub async fn next_block(&mut self) -> Result<Option<(Cid, Vec<u8>)>, Error> {
-        read_node(&mut self.reader, &mut self.buffer).await
+    pub fn next_block(&mut self) -> Result<Option<(Cid, Vec<u8>)>, Error> {
+        read_node(&mut self.reader, &mut self.buffer)
     }
+}
 
-    pub fn stream(self) -> impl Stream<Item = Result<(Cid, Vec<u8>), Error>> {
-        futures::stream::try_unfold(self, |mut this| async move {
-            let maybe_block = read_node(&mut this.reader, &mut this.buffer).await?;
-            Ok(maybe_block.map(|b| (b, this)))
-        })
+impl<R: core2::io::Read> IntoIterator for CarReader<R> {
+    type Item = Result<(Cid, Vec<u8>), Error>;
+    type IntoIter = Iter<R>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        Iter(self)
+    }
+}
+
+pub struct Iter<R: core2::io::Read>(CarReader<R>);
+impl<R: core2::io::Read> Iterator for Iter<R> {
+    type Item = Result<(Cid, Vec<u8>), Error>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        read_node(&mut self.0.reader, &mut self.0.buffer).transpose()
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::io::Cursor;
-
+    use super::*;
+    use crate::{header::CarHeaderV1, writer::CarWriter};
+    use alloc::vec;
     use cid::Cid;
-    use futures::TryStreamExt;
+    use core2::io::Cursor;
+    use itertools::Itertools;
     use multihash_codetable::MultihashDigest;
 
-    use crate::{header::CarHeaderV1, writer::CarWriter};
-
-    use super::*;
-
-    #[cfg(target_arch = "wasm32")]
-    use wasm_bindgen_test::wasm_bindgen_test;
-
-    #[cfg(target_arch = "wasm32")]
-    wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
-
-    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
-    #[cfg_attr(not(target_arch = "wasm32"), tokio::test)]
-    async fn car_write_read() {
+    fn car_write_read() {
         let digest_test = multihash_codetable::Code::Blake3_256.digest(b"test");
         let cid_test = Cid::new_v1(0x71, digest_test);
 
@@ -89,13 +89,13 @@ mod tests {
 
         let mut buffer = Vec::new();
         let mut writer = CarWriter::new(header, &mut buffer);
-        writer.write(cid_test, b"test").await.unwrap();
-        writer.write(cid_foo, b"foo").await.unwrap();
-        writer.finish().await.unwrap();
+        writer.write(cid_test, b"test").unwrap();
+        writer.write(cid_foo, b"foo").unwrap();
+        writer.finish().unwrap();
 
         let reader = Cursor::new(&buffer);
-        let car_reader = CarReader::new(reader).await.unwrap();
-        let files: Vec<_> = car_reader.stream().try_collect().await.unwrap();
+        let car_reader = CarReader::new(reader).unwrap();
+        let files: Vec<_> = car_reader.into_iter().try_collect().unwrap();
 
         assert_eq!(files.len(), 2);
         assert_eq!(files[0].0, cid_test);

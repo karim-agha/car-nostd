@@ -1,7 +1,7 @@
+use crate::error::Error;
+use alloc::{borrow::ToOwned, string::ToString, vec::Vec};
 use cid::Cid;
 use serde::{Deserialize, Serialize};
-
-use crate::error::Error;
 
 /// A car header.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -76,18 +76,10 @@ impl From<Vec<Cid>> for CarHeaderV1 {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+    use alloc::vec;
     use multihash_codetable::MultihashDigest;
 
-    use super::*;
-
-    #[cfg(target_arch = "wasm32")]
-    use wasm_bindgen_test::wasm_bindgen_test;
-
-    #[cfg(target_arch = "wasm32")]
-    wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
-
-    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
-    #[cfg_attr(not(target_arch = "wasm32"), test)]
     fn symmetric_header_v1() {
         let digest = multihash_codetable::Code::Blake3_256.digest(b"test");
         let cid = Cid::new_v1(0x71, digest);

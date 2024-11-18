@@ -1,17 +1,16 @@
-use anyhow::Result;
+use alloc::{string::ToString, vec::Vec};
 use cid::Cid;
-use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
-
+use core2::io::{Read, Write};
 use super::error::Error;
 
 /// Maximum size that is used for single node.
 pub(crate) const MAX_ALLOC: usize = 4 * 1024 * 1024;
 
-pub(crate) async fn ld_read<R>(mut reader: R, buf: &mut Vec<u8>) -> Result<Option<&[u8]>, Error>
+pub(crate) fn ld_read<R>(mut reader: R, buf: &mut Vec<u8>) -> Result<Option<&[u8]>, Error>
 where
-    R: AsyncRead + Unpin,
+    R: Read + Unpin,
 {
-    let length: usize = match read_varint_usize(&mut reader).await {
+    let length: usize = match read_varint_usize(&mut reader) {
         Ok(Some(len)) => len,
         Ok(None) => return Ok(None),
         Err(e) => {
@@ -27,19 +26,18 @@ where
 
     reader
         .read_exact(&mut buf[..length])
-        .await
         .map_err(|e| Error::Parsing(e.to_string()))?;
 
     Ok(Some(&buf[..length]))
 }
 
 /// Read a varint from the provided reader. Returns `Ok(None)` on unexpected `EOF`.
-pub async fn read_varint_usize<R: AsyncRead + Unpin>(
+pub fn read_varint_usize<R: Read + Unpin>(
     mut reader: R,
 ) -> Result<Option<usize>, unsigned_varint::io::ReadError> {
     let mut b = unsigned_varint::encode::usize_buffer();
     for i in 0..b.len() {
-        let n = reader.read(&mut b[i..i + 1]).await?;
+        let n = reader.read(&mut b[i..i + 1])?;
         if n == 0 {
             return Ok(None);
         }
@@ -53,26 +51,26 @@ pub async fn read_varint_usize<R: AsyncRead + Unpin>(
 }
 
 /// Write the given number as varint to the provided writer.
-pub async fn write_varint_usize<W: AsyncWrite + Unpin>(
+pub fn write_varint_usize<W: Write + Unpin>(
     num: usize,
     mut writer: W,
-) -> std::io::Result<usize> {
+) -> core2::io::Result<usize> {
     let mut buffer = unsigned_varint::encode::usize_buffer();
     let to_write = unsigned_varint::encode::usize(num, &mut buffer);
-    writer.write_all(to_write).await?;
+    writer.write_all(to_write)?;
 
     Ok(to_write.len())
 }
 
-pub(crate) async fn read_node<R>(
+pub(crate) fn read_node<R>(
     buf_reader: &mut R,
     buf: &mut Vec<u8>,
 ) -> Result<Option<(Cid, Vec<u8>)>, Error>
 where
-    R: AsyncRead + Unpin,
+    R: Read,
 {
-    if let Some(buf) = ld_read(buf_reader, buf).await? {
-        let mut cursor = std::io::Cursor::new(buf);
+    if let Some(buf) = ld_read(buf_reader, buf)? {
+        let mut cursor = core2::io::Cursor::new(buf);
         let c = Cid::read_bytes(&mut cursor)?;
         let pos = cursor.position() as usize;
 
@@ -83,48 +81,39 @@ where
 
 #[cfg(test)]
 mod tests {
-    use tokio::io::{AsyncWrite, AsyncWriteExt};
 
     use super::*;
+    use alloc::vec;
+    use core2::io::{Read, Write};
 
-    #[cfg(target_arch = "wasm32")]
-    use wasm_bindgen_test::wasm_bindgen_test;
-
-    #[cfg(target_arch = "wasm32")]
-    wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
-
-    async fn ld_write<'a, W>(writer: &mut W, bytes: &[u8]) -> Result<(), Error>
+    fn ld_write<'a, W>(writer: &mut W, bytes: &[u8]) -> Result<(), Error>
     where
-        W: AsyncWrite + Send + Unpin,
+        W: Write,
     {
-        write_varint_usize(bytes.len(), &mut *writer).await?;
-        writer.write_all(bytes).await?;
-        writer.flush().await?;
+        write_varint_usize(bytes.len(), &mut *writer)?;
+        writer.write_all(bytes)?;
+        writer.flush()?;
         Ok(())
     }
 
-    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
-    #[cfg_attr(not(target_arch = "wasm32"), tokio::test)]
-    async fn ld_read_write_good() {
+    fn ld_read_write_good() {
         let mut buffer = Vec::<u8>::new();
-        ld_write(&mut buffer, b"test bytes").await.unwrap();
-        let reader = std::io::Cursor::new(buffer);
+        ld_write(&mut buffer, b"test bytes").unwrap();
+        let reader = core2::io::Cursor::new(buffer);
 
         let mut buffer = vec![1u8; 1024];
-        let read = ld_read(reader, &mut buffer).await.unwrap().unwrap();
+        let read = ld_read(reader, &mut buffer).unwrap().unwrap();
         assert_eq!(read, b"test bytes");
     }
 
-    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
-    #[cfg_attr(not(target_arch = "wasm32"), tokio::test)]
     async fn ld_read_write_fail() {
         let mut buffer = Vec::<u8>::new();
         let size = MAX_ALLOC + 1;
-        ld_write(&mut buffer, &vec![2u8; size]).await.unwrap();
-        let reader = std::io::Cursor::new(buffer);
+        ld_write(&mut buffer, &vec![2u8; size]).unwrap();
+        let reader = core2::io::Cursor::new(buffer);
 
         let mut buffer = vec![1u8; 1024];
-        let read = ld_read(reader, &mut buffer).await;
+        let read = ld_read(reader, &mut buffer);
         assert!(matches!(read, Err(Error::LdReadTooLarge(_))));
     }
 }

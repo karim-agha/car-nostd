@@ -1,18 +1,29 @@
-use thiserror::Error;
+use alloc::string::{String, ToString};
 
-/// Car utility error
-#[derive(Debug, Error)]
 pub enum Error {
-    #[error("Failed to parse CAR file: {0}")]
     Parsing(String),
-    #[error("Invalid CAR file: {0}")]
     InvalidFile(String),
-    #[error("Io error: {0}")]
-    Io(#[from] std::io::Error),
-    #[error("Cbor encoding error: {0}")]
-    Cbor(#[from] serde_ipld_dagcbor::error::CodecError),
-    #[error("ld read too large {0}")]
+    Io(core2::io::Error),
+    Cbor(serde_ipld_dagcbor::error::CodecError),
     LdReadTooLarge(usize),
+}
+
+impl core::fmt::Debug for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Error::Parsing(s) => write!(f, "Parsing error: {}", s),
+            Error::InvalidFile(s) => write!(f, "Invalid file error: {}", s),
+            Error::Io(e) => write!(f, "Io error: {}", e),
+            Error::Cbor(e) => write!(f, "Cbor error: {}", e),
+            Error::LdReadTooLarge(s) => write!(f, "Ld read too large: {}", s),
+        }
+    }
+}
+
+impl From<core2::io::Error> for Error {
+    fn from(err: core2::io::Error) -> Error {
+        Error::Io(err)
+    }
 }
 
 impl From<cid::Error> for Error {

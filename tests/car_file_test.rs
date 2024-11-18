@@ -1,42 +1,33 @@
-use futures::TryStreamExt;
-use iroh_car::*;
-use tokio::io::BufReader;
-
-#[cfg(target_arch = "wasm32")]
-use wasm_bindgen_test::wasm_bindgen_test;
-
-#[cfg(target_arch = "wasm32")]
-wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
+use car_nostd::*;
+use itertools::Itertools;
+use std::io::BufReader;
 
 const TEST_V1_CAR: &[u8] = include_bytes!("testv1.car");
 const CAR_V1_BASIC: &[u8] = include_bytes!("carv1_basic.car");
 
-#[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
-#[cfg_attr(not(target_arch = "wasm32"), tokio::test)]
-async fn roundtrip_carv1_test_file() {
+#[test]
+fn roundtrip_carv1_test_file() {
     let buf_reader = BufReader::new(TEST_V1_CAR);
 
-    let car_reader = CarReader::new(buf_reader).await.unwrap();
+    let car_reader = CarReader::new(buf_reader).unwrap();
     let header = car_reader.header().clone();
-    let files: Vec<_> = car_reader.stream().try_collect().await.unwrap();
+    let files: Vec<_> = car_reader.into_iter().try_collect().unwrap();
     assert_eq!(files.len(), 35);
 
     let mut buffer = Vec::new();
     let mut writer = CarWriter::new(header, &mut buffer);
     for (cid, data) in &files {
-        writer.write(*cid, data).await.unwrap();
+        writer.write(*cid, data).unwrap();
     }
-    writer.finish().await.unwrap();
+    writer.finish().unwrap();
 
     assert_eq!(TEST_V1_CAR, buffer.as_slice());
 }
-
-#[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
-#[cfg_attr(not(target_arch = "wasm32"), tokio::test)]
-async fn roundtrip_carv1_basic_fixtures_file() {
+#[test]
+fn roundtrip_carv1_basic_fixtures_file() {
     let buf_reader = BufReader::new(CAR_V1_BASIC);
 
-    let car_reader = CarReader::new(buf_reader).await.unwrap();
+    let car_reader = CarReader::new(buf_reader).unwrap();
     let header = car_reader.header().clone();
 
     assert_eq!(
@@ -51,7 +42,7 @@ async fn roundtrip_carv1_basic_fixtures_file() {
         ]
     );
 
-    let files: Vec<_> = car_reader.stream().try_collect().await.unwrap();
+    let files: Vec<_> = car_reader.into_iter().try_collect().unwrap();
     assert_eq!(files.len(), 8);
 
     let cids = [
@@ -72,9 +63,9 @@ async fn roundtrip_carv1_basic_fixtures_file() {
     let mut buffer = Vec::new();
     let mut writer = CarWriter::new(header, &mut buffer);
     for (cid, data) in &files {
-        writer.write(*cid, data).await.unwrap();
+        writer.write(*cid, data).unwrap();
     }
-    writer.finish().await.unwrap();
+    writer.finish().unwrap();
 
     assert_eq!(CAR_V1_BASIC, buffer.as_slice());
 }

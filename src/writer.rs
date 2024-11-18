@@ -1,7 +1,7 @@
-use cid::Cid;
-use tokio::io::{AsyncWrite, AsyncWriteExt};
-
 use crate::{error::Error, header::CarHeader, util::write_varint_usize};
+use alloc::vec::Vec;
+use cid::Cid;
+use core2::io::Write;
 
 #[derive(Debug)]
 pub struct CarWriter<W> {
@@ -13,7 +13,7 @@ pub struct CarWriter<W> {
 
 impl<W> CarWriter<W>
 where
-    W: AsyncWrite + Send + Unpin,
+    W: Write + Send + Unpin,
 {
     pub fn new(header: CarHeader, writer: W) -> Self {
         CarWriter {
@@ -27,14 +27,14 @@ where
     /// Forces the header to be written. Also called implicitly by `write`.
     ///
     /// Returns the bytes written in this operation.
-    pub async fn write_header(&mut self) -> Result<usize, Error> {
+    pub fn write_header(&mut self) -> Result<usize, Error> {
         let mut written = 0;
 
         if !self.is_header_written {
             // Write header bytes
             let header_bytes = self.header.encode()?;
-            written += write_varint_usize(header_bytes.len(), &mut self.writer).await?;
-            self.writer.write_all(&header_bytes).await?;
+            written += write_varint_usize(header_bytes.len(), &mut self.writer)?;
+            self.writer.write_all(&header_bytes)?;
             written += header_bytes.len();
             self.is_header_written = true;
         }
@@ -45,12 +45,12 @@ where
     /// Writes header and stream of data to writer in Car format.
     ///
     /// Returns the bytes written in this operation.
-    pub async fn write<T>(&mut self, cid: Cid, data: T) -> Result<usize, Error>
+    pub fn write<T>(&mut self, cid: Cid, data: T) -> Result<usize, Error>
     where
         T: AsRef<[u8]>,
     {
         let mut written = 0;
-        written += self.write_header().await?;
+        written += self.write_header()?;
 
         // Write the given block.
         self.cid_buffer.clear();
@@ -59,9 +59,9 @@ where
         let data = data.as_ref();
         let len = self.cid_buffer.len() + data.len();
 
-        written += write_varint_usize(len, &mut self.writer).await?;
-        self.writer.write_all(&self.cid_buffer).await?;
-        self.writer.write_all(data).await?;
+        written += write_varint_usize(len, &mut self.writer)?;
+        self.writer.write_all(&self.cid_buffer)?;
+        self.writer.write_all(data)?;
         written += self.cid_buffer.len();
         written += data.len();
 
@@ -69,14 +69,14 @@ where
     }
 
     /// Finishes writing, including flushing and returns the writer.
-    pub async fn finish(mut self) -> Result<W, Error> {
-        self.flush().await?;
+    pub fn finish(mut self) -> Result<W, Error> {
+        self.flush()?;
         Ok(self.writer)
     }
 
     /// Flushes the underlying writer.
-    pub async fn flush(&mut self) -> Result<(), Error> {
-        self.writer.flush().await?;
+    pub fn flush(&mut self) -> Result<(), Error> {
+        self.writer.flush()?;
         Ok(())
     }
 
